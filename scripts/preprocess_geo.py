@@ -105,15 +105,11 @@ def log2_transform(expr: pd.DataFrame) -> pd.DataFrame:
 
 
 def zscore_features(expr: pd.DataFrame) -> pd.DataFrame:
-    """
-    Z-score each feature across samples.
-    Input must be samples x features.
-    """
     x = expr.apply(pd.to_numeric, errors="coerce")
     mu = x.mean(axis=0)
     sd = x.std(axis=0, ddof=0).replace(0, np.nan)
-    return ((x - mu) / sd).fillna(0.0)
-
+    z = ((x - mu) / sd).fillna(0.0)
+    return z, mu, sd
 
 def align_expression_and_metadata(expr: pd.DataFrame, meta: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -417,8 +413,13 @@ def process_rna(raw_dir: Path, out_dir: Path) -> Tuple[pd.DataFrame, pd.DataFram
     expr_raw.to_csv(out / "expression_raw_samples_by_features.csv")
     expr_log = log2_transform(expr_raw)
     expr_log.to_csv(out / "expression_log2_samples_by_features.csv")
-    expr_z = zscore_features(expr_log)
+    expr_z, rna_mu, rna_sd = zscore_features(expr_log)
+
     expr_z.to_csv(out / "expression_zscore_samples_by_features.csv")
+
+    # Save scaler parameters
+    rna_mu.to_csv(out / "rna_feature_mean.csv")
+    rna_sd.to_csv(out / "rna_feature_std.csv")
     meta.to_csv(out / "metadata_aligned.csv", index=False)
 
     LOG.info("RNA raw matrix shape: %s", expr_raw.shape)
@@ -440,7 +441,7 @@ def process_microarray(raw_dir: Path, out_dir: Path) -> Tuple[pd.DataFrame, pd.D
     out = out_dir / ARRAY_ACCESSION
     out.mkdir(parents=True, exist_ok=True)
     expr_raw.to_csv(out / "expression_raw_samples_by_features.csv")
-    expr_z = zscore_features(expr_raw)
+    expr_z, _, _ = zscore_features(expr_raw)
     expr_z.to_csv(out / "expression_zscore_samples_by_features.csv")
     meta.to_csv(out / "metadata_aligned.csv", index=False)
 
@@ -469,10 +470,15 @@ def build_shared_space(rna_log: pd.DataFrame, array_raw: pd.DataFrame, out_dir: 
     rna_shared.to_csv(shared_dir / "rna_shared_log2.csv")
     array_shared.to_csv(shared_dir / "microarray_shared_log2.csv")
 
-    rna_shared_z = zscore_features(rna_shared)
-    array_shared_z = zscore_features(array_shared)
+    rna_shared_z, rna_mu, rna_sd = zscore_features(rna_shared)
+    array_shared_z, _, _ = zscore_features(array_shared)
+
     rna_shared_z.to_csv(shared_dir / "rna_shared_zscore.csv")
     array_shared_z.to_csv(shared_dir / "microarray_shared_zscore.csv")
+
+    # Save shared scaler
+    rna_mu.to_csv(shared_dir / "rna_shared_mean.csv")
+    rna_sd.to_csv(shared_dir / "rna_shared_std.csv")
 
     LOG.info("Shared gene symbols: %d", len(shared))
     LOG.info("RNA shared matrix shape: %s", rna_shared_z.shape)
