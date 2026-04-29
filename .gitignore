@@ -3,3 +3,4 @@ data/
 *.gz
 *.txt.gz
 *.csv
+.git
